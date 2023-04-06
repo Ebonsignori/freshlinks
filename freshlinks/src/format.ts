@@ -15,3 +15,10 @@ ${chalk.underline(`${link.sourceFile}:${link.startLine}`)}
 ${chalk.bold.red('Error')} Could not resolve link: ${chalk.yellow(link.link)}`
   return errorString
 }
+
+export function formatNonRelativeMarkdownLink(link: MarkdownLink): string {
+  const errorString = `
+${chalk.underline(`${link.sourceFile}:${link.startLine}`)}
+${chalk.bold.red('Error')} Please make link relative: ${chalk.yellow(link.link)}`
+  return errorString
+}

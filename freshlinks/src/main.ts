@@ -22,11 +22,12 @@ export {
 }
 
 export async function* validate_markdown_links_from_files(
-  filenames: AsyncGenerator<string>
+  filenames: AsyncGenerator<string>,
+  absoluteBaseUrl?: string,
 ): AsyncGenerator<[MarkdownLink, LinkValidity]> {
   for await (const links of parse_markdown_links_from_files(filenames)) {
     for (const link of links) {
-      const valid = await valid_link(link)
+      const valid = await valid_link(link, absoluteBaseUrl)
       yield [link, valid]
     }
   }

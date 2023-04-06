@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import {parse_markdown_links_from_file} from './parse-markdown-links'
-import {formatInvalidMarkdownLink} from './format'
+import {formatInvalidMarkdownLink, formatNonRelativeMarkdownLink} from './format'
 import {valid_link, LinkValidity} from './validate-link'
 import {suggestPath, SUGGEST_MIN_DISTANCE} from './suggest-path'
 import {gitLsFiles} from './git'
@@ -54,6 +54,9 @@ async function run(): Promise<void> {
               console.log(`Perhaps you meant: ${chalk.blue(suggestion)}`)
             }
           }
+        } else if (valid === LinkValidity.NonRelative) {
+          exitCode = 1
+          console.log(formatNonRelativeMarkdownLink(link))
         }
       }
     } catch (error) {
