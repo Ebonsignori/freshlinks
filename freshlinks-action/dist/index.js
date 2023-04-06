@@ -46,12 +46,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
+const path_1 = __importDefault(__nccwpck_require__(5622));
+const url_1 = __nccwpck_require__(8835);
 const core = __importStar(__nccwpck_require__(2186));
 const glob = __importStar(__nccwpck_require__(8090));
 const freshlinks = __importStar(__nccwpck_require__(7064));
 const mustache_1 = __importDefault(__nccwpck_require__(8272));
 const defaultErrorTemplate = `
 Could not find {{link}}.
+{{#suggestion}}
+Perhaps you meant \`{{suggested_link}}\`?
+{{/suggestion}}
+`.trim();
+const absolutePathErrorTemplate = `
+{{link}} is absolute and should be relative.
 {{#suggestion}}
 Perhaps you meant \`{{suggested_link}}\`?
 {{/suggestion}}
@@ -68,18 +76,24 @@ function calculatePossibleLinkDestinations(suggestions) {
         return possibleLinkDestinations;
     });
 }
-function checkFiles(globber, suggestions, possibleLinkDestinations, annotationTemplate) {
+function checkFiles(globber, suggestions, possibleLinkDestinations, annotationTemplate, absoluteBaseUrl, absoluteBasePath) {
     var e_1, _a;
     return __awaiter(this, void 0, void 0, function* () {
         let failCount = 0;
         try {
-            for (var _b = __asyncValues(freshlinks.validate_markdown_links_from_files(globber.globGenerator())), _c; _c = yield _b.next(), !_c.done;) {
+            for (var _b = __asyncValues(freshlinks.validate_markdown_links_from_files(globber.globGenerator(), absoluteBaseUrl)), _c; _c = yield _b.next(), !_c.done;) {
                 const [link, valid] = _c.value;
                 if (valid === freshlinks.LinkValidity.Invalid) {
                     failCount++;
                 }
+                else if (valid === freshlinks.LinkValidity.NonRelative) {
+                    failCount++;
+                }
                 if (valid === freshlinks.LinkValidity.Invalid) {
                     reportFile(link, suggestions, possibleLinkDestinations, annotationTemplate);
+                }
+                else if (valid === freshlinks.LinkValidity.NonRelative && absoluteBaseUrl !== '') {
+                    reportFile(link, suggestions, possibleLinkDestinations, absolutePathErrorTemplate, valid, absoluteBaseUrl, absoluteBasePath);
                 }
             }
         }
@@ -93,9 +107,17 @@ function checkFiles(globber, suggestions, possibleLinkDestinations, annotationTe
         return failCount > 0 ? true : false;
     });
 }
-function reportFile(link, suggestions, possibleLinkDestinations, annotationTemplate) {
-    const sourceFile = link.sourceFile.replace('/home/runner/work/freshlinks/freshlinks/', '');
-    const suggestion = calculateSuggestion();
+function reportFile(link, suggestions, possibleLinkDestinations, annotationTemplate, valid, absoluteBaseUrl, absoluteBasePath) {
+    let sourceFile = link.sourceFile.replace('/home/runner/work/freshlinks/freshlinks/', '');
+    core.debug("broken link: " + link.link);
+    core.debug("sourceFile: " + sourceFile);
+    let suggestion = null;
+    if (valid === freshlinks.LinkValidity.NonRelative && absoluteBaseUrl !== '' && suggestions) {
+        suggestion = calculateRelativePath();
+    }
+    else {
+        suggestion = calculateSuggestion();
+    }
     const templateArgs = { link: link.link, suggestion: undefined };
     if (suggestion) {
         templateArgs.suggestion = { suggested_link: suggestion };
@@ -118,6 +140,32 @@ function reportFile(link, suggestions, possibleLinkDestinations, annotationTempl
         }
         return null;
     }
+    function calculateRelativePath() {
+        let absoluteFilePath;
+        let hashLink = '';
+        if (link.link.startsWith("/")) {
+            absoluteFilePath = link.link;
+        }
+        else {
+            const urlParts = link.link.match(/^(([^:\/?#]+):)?(\/\/([^\/?#]*))?([^?#]*)(\?([^#]*))?(#(.*))?/);
+            // urlParts[5] is the absolute path of the link, e.g. /epd/planning
+            absoluteFilePath = (urlParts === null || urlParts === void 0 ? void 0 : urlParts[5]) || '';
+            hashLink = (urlParts === null || urlParts === void 0 ? void 0 : urlParts[8]) || '';
+        }
+        console.log("absoluteFilePath: " + absoluteFilePath);
+        if (absoluteBasePath && !absoluteFilePath.startsWith(`/${absoluteBasePath}`)) {
+            absoluteFilePath = `/${absoluteBasePath}` + absoluteFilePath;
+        }
+        let relativePath = path_1.default.relative(sourceFile, absoluteFilePath);
+        // Append hash link from original URL if it exists, e.g. #first-heading
+        if (hashLink) {
+            relativePath += hashLink;
+        }
+        if (relativePath) {
+            return relativePath;
+        }
+        return null;
+    }
 }
 function getAnnotationTemplate() {
     const userTemplate = core.getInput('error-template');
@@ -128,11 +176,31 @@ function run() {
         try {
             const scan_glob = core.getInput('glob', { required: true });
             const suggestions = core.getInput('suggestions') !== 'false';
+            // Relative-only link enforcement is enabled when absolute-base-url is set
+            let absoluteBaseUrl = core.getInput('absolute-base-url');
+            try {
+                absoluteBaseUrl = new url_1.URL(absoluteBaseUrl).hostname;
+            }
+            catch (error) {
+                core.setFailed("absolute-base-url must be a valid URL");
+            }
+            // For suggesting relative paths, we need to know the absolute base path of the file in the repo relative to the ending of the absolute base url
+            // e.g. if a link is https://thehub.github.com/epd/planning and absolute-base-url is thehub.github.com
+            // and the file lives in thehub/docs/epd/planning.md then the absolute-base-path in this case is "docs/"
+            let absoluteBasePath = core.getInput('absolute-base-path');
+            if (absoluteBasePath !== '') {
+                if (absoluteBasePath.slice(-1) === '/') {
+                    absoluteBasePath = absoluteBasePath.slice(0, -1);
+                }
+                if (absoluteBasePath.startsWith('/')) {
+                    core.setFailed('absolute-base-path cannot start with a /. Make this the path relative to the repo root');
+                }
+            }
             const annotationTemplate = getAnnotationTemplate();
             core.debug(`Scanning glob ${scan_glob}`); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
             const possibleLinkDestinations = yield calculatePossibleLinkDestinations(suggestions);
             const globber = yield glob.create(scan_glob);
-            const failed = yield checkFiles(globber, suggestions, possibleLinkDestinations, annotationTemplate);
+            const failed = yield checkFiles(globber, suggestions, possibleLinkDestinations, annotationTemplate, absoluteBaseUrl, absoluteBasePath);
             if (failed) {
                 core.setFailed('Invalid links found');
             }
@@ -3702,7 +3770,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.formatInvalidMarkdownLink = exports.formatMarkdownLink = void 0;
+exports.formatNonRelativeMarkdownLink = exports.formatInvalidMarkdownLink = exports.formatMarkdownLink = void 0;
 const validate_link_1 = __nccwpck_require__(1831);
 const chalk_1 = __importDefault(__nccwpck_require__(2341));
 function formatMarkdownLink(link, valid) {
@@ -3716,6 +3784,13 @@ ${chalk_1.default.bold.red('Error')} Could not resolve link: ${chalk_1.default.y
     return errorString;
 }
 exports.formatInvalidMarkdownLink = formatInvalidMarkdownLink;
+function formatNonRelativeMarkdownLink(link) {
+    const errorString = `
+${chalk_1.default.underline(`${link.sourceFile}:${link.startLine}`)}
+${chalk_1.default.bold.red('Error')} Please make link relative. /docs/ is removed from production url: ${chalk_1.default.yellow(link.link)}`;
+    return errorString;
+}
+exports.formatNonRelativeMarkdownLink = formatNonRelativeMarkdownLink;
 
 
 /***/ }),
@@ -3816,14 +3891,14 @@ Object.defineProperty(exports, "suggestPath", ({ enumerable: true, get: function
 Object.defineProperty(exports, "SUGGEST_MIN_DISTANCE", ({ enumerable: true, get: function () { return suggest_path_1.SUGGEST_MIN_DISTANCE; } }));
 const git_1 = __nccwpck_require__(3926);
 Object.defineProperty(exports, "gitLsFiles", ({ enumerable: true, get: function () { return git_1.gitLsFiles; } }));
-function validate_markdown_links_from_files(filenames) {
+function validate_markdown_links_from_files(filenames, absoluteBaseUrl) {
     return __asyncGenerator(this, arguments, function* validate_markdown_links_from_files_1() {
         var e_1, _a;
         try {
             for (var _b = __asyncValues(parse_markdown_links_1.parse_markdown_links_from_files(filenames)), _c; _c = yield __await(_b.next()), !_c.done;) {
                 const links = _c.value;
                 for (const link of links) {
-                    const valid = yield __await(validate_link_1.valid_link(link));
+                    const valid = yield __await(validate_link_1.valid_link(link, absoluteBaseUrl));
                     yield yield __await([link, valid]);
                 }
             }
@@ -4022,9 +4097,15 @@ var LinkValidity;
     LinkValidity[LinkValidity["Valid"] = 0] = "Valid";
     LinkValidity[LinkValidity["Invalid"] = 1] = "Invalid";
     LinkValidity[LinkValidity["Unknown"] = 2] = "Unknown";
+    LinkValidity[LinkValidity["NonRelative"] = 3] = "NonRelative";
 })(LinkValidity = exports.LinkValidity || (exports.LinkValidity = {}));
-function valid_link(link) {
+function valid_link(link, absoluteBaseUrl) {
     return __awaiter(this, void 0, void 0, function* () {
+        // If link is using an absolute link with the base url, and absoluteBaseUrl is set, then we throw
+        // an "NonRelative" error because we want it to be a relative link instead
+        if (absoluteBaseUrl && link.link.includes(absoluteBaseUrl)) {
+            return LinkValidity.NonRelative;
+        }
         const parsedUrl = url_1.parse(link.link);
         if (!parsedUrl.protocol && !parsedUrl.host) {
             let linkPath = parsedUrl.pathname;
@@ -4033,8 +4114,11 @@ function valid_link(link) {
             }
             const decodedLinkPath = decodeURIComponent(linkPath);
             const sourceFile = path_1.dirname(link.sourceFile);
-            // don't test absolute paths
-            if (!decodedLinkPath.startsWith('/')) {
+            // Throw NonRelative error for absolute paths too
+            if (decodedLinkPath.startsWith('/')) {
+                return LinkValidity.NonRelative;
+            }
+            else {
                 const joinedLinkPath = path_1.join(sourceFile, decodedLinkPath);
                 try {
                     yield fs_1.promises.access(joinedLinkPath);
@@ -4043,9 +4127,6 @@ function valid_link(link) {
                 catch (error) {
                     return LinkValidity.Invalid;
                 }
-            }
-            else {
-                return LinkValidity.Unknown;
             }
         }
         else {
