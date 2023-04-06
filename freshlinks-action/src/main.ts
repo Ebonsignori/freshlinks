@@ -81,6 +81,7 @@ function reportFile(
   absoluteBasePath?: string
 ): void {
   const runnerLocation = core.getInput('runner-location') || '/home/runner/work/freshlinks/freshlinks'
+  core.debug('runnerLocation: ' + runnerLocation)
   let sourceFile = link.sourceFile.replace(
     runnerLocation,
     ''

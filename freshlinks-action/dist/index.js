@@ -108,9 +108,9 @@ function checkFiles(globber, suggestions, possibleLinkDestinations, annotationTe
     });
 }
 function reportFile(link, suggestions, possibleLinkDestinations, annotationTemplate, valid, absoluteBaseUrl, absoluteBasePath) {
-    let sourceFile = link.sourceFile.replace('/home/runner/work/freshlinks/freshlinks/', '');
-    core.debug("broken link: " + link.link);
-    core.debug("sourceFile: " + sourceFile);
+    const runnerLocation = core.getInput('runner-location') || '/home/runner/work/freshlinks/freshlinks';
+    core.debug('runnerLocation: ' + runnerLocation);
+    let sourceFile = link.sourceFile.replace(runnerLocation, '');
     let suggestion = null;
     if (valid === freshlinks.LinkValidity.NonRelative && absoluteBaseUrl !== '' && suggestions) {
         suggestion = calculateRelativePath();
@@ -152,11 +152,13 @@ function reportFile(link, suggestions, possibleLinkDestinations, annotationTempl
             absoluteFilePath = (urlParts === null || urlParts === void 0 ? void 0 : urlParts[5]) || '';
             hashLink = (urlParts === null || urlParts === void 0 ? void 0 : urlParts[8]) || '';
         }
-        console.log("absoluteFilePath: " + absoluteFilePath);
         if (absoluteBasePath && !absoluteFilePath.startsWith(`/${absoluteBasePath}`)) {
             absoluteFilePath = `/${absoluteBasePath}` + absoluteFilePath;
         }
+        core.debug("sourceFile: " + sourceFile);
+        core.debug("absoluteFilePath: " + absoluteFilePath);
         let relativePath = path_1.default.relative(sourceFile, absoluteFilePath);
+        core.debug("relativePath: " + relativePath);
         // Append hash link from original URL if it exists, e.g. #first-heading
         if (hashLink) {
             relativePath += hashLink;
