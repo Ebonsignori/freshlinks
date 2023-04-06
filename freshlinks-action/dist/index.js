@@ -3787,7 +3787,7 @@ exports.formatInvalidMarkdownLink = formatInvalidMarkdownLink;
 function formatNonRelativeMarkdownLink(link) {
     const errorString = `
 ${chalk_1.default.underline(`${link.sourceFile}:${link.startLine}`)}
-${chalk_1.default.bold.red('Error')} Please make link relative. /docs/ is removed from production url: ${chalk_1.default.yellow(link.link)}`;
+${chalk_1.default.bold.red('Error')} Please make link relative: ${chalk_1.default.yellow(link.link)}`;
     return errorString;
 }
 exports.formatNonRelativeMarkdownLink = formatNonRelativeMarkdownLink;
@@ -4103,7 +4103,7 @@ function valid_link(link, absoluteBaseUrl) {
     return __awaiter(this, void 0, void 0, function* () {
         // If link is using an absolute link with the base url, and absoluteBaseUrl is set, then we throw
         // an "NonRelative" error because we want it to be a relative link instead
-        if (absoluteBaseUrl && link.link.includes(absoluteBaseUrl)) {
+        if (absoluteBaseUrl && link.link.includes(absoluteBaseUrl) && !link.link.includes('javascript:void')) {
             return LinkValidity.NonRelative;
         }
         const parsedUrl = url_1.parse(link.link);

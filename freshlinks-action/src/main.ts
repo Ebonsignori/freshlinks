@@ -141,7 +141,10 @@ function reportFile(
     if (absoluteBasePath && !absoluteFilePath.startsWith(`/${absoluteBasePath}`)) {
       absoluteFilePath = `/${absoluteBasePath}` + absoluteFilePath
     }
+    core.debug("sourceFile: " + sourceFile)
+    core.debug("absoluteFilePath: " + absoluteFilePath)
     let relativePath = path.relative(sourceFile, absoluteFilePath)
+    core.debug("relativePath: " + relativePath)
     // Append hash link from original URL if it exists, e.g. #first-heading
     if (hashLink) {
       relativePath += hashLink

@@ -13,7 +13,7 @@ export enum LinkValidity {
 export async function valid_link(link: MarkdownLink, absoluteBaseUrl?: string): Promise<LinkValidity> {
   // If link is using an absolute link with the base url, and absoluteBaseUrl is set, then we throw
   // an "NonRelative" error because we want it to be a relative link instead
-  if (absoluteBaseUrl && link.link.includes(absoluteBaseUrl)) {
+  if (absoluteBaseUrl && link.link.includes(absoluteBaseUrl) && !link.link.includes('javascript:void')) {
     return LinkValidity.NonRelative
   }
 
