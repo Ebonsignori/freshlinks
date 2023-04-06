@@ -11,6 +11,12 @@ inputs:
   error-template:
     required: false
     description: 'A mustache template string to override error messages. See the README for more detailed information.'
+  absolute-base-url:
+    required: false
+    description: 'Production url of code. When passed, markdown files using this URL will error with instructions to make it relative instead.'
+  absolute-base-path:
+    required: false
+    description: 'If a url is https://thehub.github.com/epd/planning and it lives in docs/epd/planning.md this value should be "docs"'
 runs:
   using: 'node12'
   main: 'freshlinks-action/dist/index.js'
