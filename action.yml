@@ -17,6 +17,10 @@ inputs:
   absolute-base-path:
     required: false
     description: 'If a url is https://thehub.github.com/epd/planning and it lives in docs/epd/planning.md this value should be "docs"'
+  runner-location: 
+     required: true
+     default: ${{ github.workspace }}
+     description: 'Full path that action checkout happens in. e.g. /home/runner/work/thehub/thehub'
 runs:
   using: 'node12'
   main: 'freshlinks-action/dist/index.js'

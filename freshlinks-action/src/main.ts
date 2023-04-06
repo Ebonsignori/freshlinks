@@ -80,10 +80,11 @@ function reportFile(
   absoluteBaseUrl?: string,
   absoluteBasePath?: string
 ): void {
+  const runnerLocation = core.getInput('runner-location') || '/home/runner/work/freshlinks/freshlinks'
   let sourceFile = link.sourceFile.replace(
-    '/home/runner/work/freshlinks/freshlinks/',
+    runnerLocation,
     ''
-  )
+  ) 
 
   let suggestion: string | null = null
   if (valid === freshlinks.LinkValidity.NonRelative && absoluteBaseUrl !== '' && suggestions) {
